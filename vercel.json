@@ -5,6 +5,10 @@
       "destination": "https://api.coingecko.com/api/v3/:path*"
     },
     {
+      "source": "/api/(.*)",
+      "destination": "/api/index.ts"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }

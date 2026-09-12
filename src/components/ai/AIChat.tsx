@@ -136,7 +136,7 @@ export function AIChat() {
       const recent = messages.slice(-4).map(m => ({ role: m.type, content: m.content, ts: m.timestamp instanceof Date ? m.timestamp.toISOString() : String(m.timestamp) }));
       let streamedText = '';
 
-      const res = await fetch('http://localhost:3001/query', {
+      const res = await fetch('/api/query', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ query: questionText })

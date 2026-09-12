@@ -24,10 +24,6 @@ const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 async function crawlAndIngest() {
   console.log('Starting deep documentation scraper (Puppeteer)...');
   const browser = await puppeteer.launch({ headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox'] });
-  const page = await browser.newPage();
-  
-  // To avoid getting blocked
-  await page.setUserAgent('CryptonAI-Bot/1.0 (contact@crypton.ai)');
 
   for (const target of TARGETS) {
     console.log(`\n======================================================`);
@@ -37,7 +33,7 @@ async function crawlAndIngest() {
     // as a full deep crawl of 10 doc sites would take hours and tens of thousands of LLM API calls.
     const visited = new Set<string>();
     const queue = [target.rootUrl];
-    let maxPagesPerProject = 5; // Cap at 5 pages per project for this demo
+    let maxPagesPerProject = 20; // Cap at 20 pages per project for deeper context
 
     while (queue.length > 0 && maxPagesPerProject > 0) {
       const currentUrl = queue.shift()!;
@@ -47,7 +43,11 @@ async function crawlAndIngest() {
       maxPagesPerProject--;
 
       console.log(`[${target.projectName}] Fetching: ${currentUrl}`);
+      
+      let page;
       try {
+        page = await browser.newPage();
+        await page.setUserAgent('CryptonAI-Bot/1.0 (contact@crypton.ai)');
         await page.goto(currentUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
         // Wait a tiny bit for JS to render
         await sleep(2000);
@@ -60,7 +60,10 @@ async function crawlAndIngest() {
 
         // Extract main content area if possible, otherwise use body
         const mainContent = $('main').length > 0 ? $('main').html() : $('body').html();
-        if (!mainContent) continue;
+        if (!mainContent) {
+          await page.close();
+          continue;
+        }
 
         const $main = cheerio.load(mainContent);
         const pageTitle = $('title').text() || $main('h1').first().text() || target.projectName;
@@ -104,6 +107,8 @@ async function crawlAndIngest() {
             // Optional: You can filter out bad chunks here based on token count
             if (chunk.tokenCount < 20) continue; 
 
+            // Rate limit mitigation for Embedding API
+            await sleep(500);
             const embedding = await embeddingService.generateEmbedding(chunk.content);
             const inserted = await dbService.insertChunk({
               projectName: target.projectName,
@@ -122,6 +127,12 @@ async function crawlAndIngest() {
         }
       } catch (err: any) {
         console.error(`❌ Error scraping ${currentUrl}:`, err.message);
+      } finally {
+        if (page && !page.isClosed()) {
+          try {
+            await page.close();
+          } catch(e) {}
+        }
       }
     }
   }

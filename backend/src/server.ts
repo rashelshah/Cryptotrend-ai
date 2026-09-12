@@ -88,6 +88,11 @@ app.post('/refresh-docs', async (req: Request, res: Response) => {
   }
 });
 
-app.listen(port, () => {
-  console.log(`[Server] Crypton AI Backend running on port ${port}`);
-});
+// Only listen on a port if not in Vercel production
+if (process.env.NODE_ENV !== 'production') {
+  app.listen(port, () => {
+    console.log(`[Server] Crypton AI Backend running on port ${port}`);
+  });
+}
+
+export default app;
