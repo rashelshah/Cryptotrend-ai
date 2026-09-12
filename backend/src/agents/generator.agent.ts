@@ -2,7 +2,7 @@ import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from '@google/ge
 import dotenv from 'dotenv';
 dotenv.config();
 
-const apiKey = process.env.GEMINI_API_KEY || '';
+const apiKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY || '';
 const genAI = new GoogleGenerativeAI(apiKey);
 
 export class GeneratorAgent {

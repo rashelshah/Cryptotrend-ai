@@ -1,7 +1,8 @@
 import dotenv from 'dotenv';
 dotenv.config();
 
-const apiKey = process.env.GEMINI_API_KEY || '';
+// Support both raw and VITE_ prefixed names for Vercel compatibility
+const apiKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY || '';
 
 export class EmbeddingService {
   /**
