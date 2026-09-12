@@ -79,6 +79,69 @@ export class GeneratorAgent {
       throw new Error('Failed to generate answer');
     }
   }
+
+  /**
+   * Streams the answer token by token via SSE sendEvent callback.
+   */
+  async generateAnswerStream(
+    query: string,
+    context: string,
+    liveData: string = '',
+    sendEvent: (data: object) => void
+  ): Promise<void> {
+    const prompt = `
+    You are Crypton AI, an expert cryptocurrency intelligence system.
+    You have been provided with context from official blockchain documentation and/or live market data from CoinLore.
+
+    USER QUERY:
+    ${query}
+
+    RETRIEVED CONTEXT (Docs):
+    ${context}
+
+    LIVE MARKET DATA:
+    ${liveData}
+
+    INSTRUCTIONS:
+    - Act as a knowledgeable, conversational AI assistant speaking directly to the user.
+    - Write your answer in a natural, easy-to-read conversational style, not a stiff document style.
+    - **CRITICAL**: DO NOT use markdown headers (###) or bullet points/lists. Write entirely in natural, flowing paragraphs.
+    - Prioritize answering from retrieved context and live data. Cite sources inline like (Source: ProjectName Docs).
+    - If information is missing, fall back to general AI knowledge and state that clearly.
+    `;
+
+    try {
+      const result = await this.model.generateContentStream(prompt);
+      for await (const chunk of result.stream) {
+        const text = chunk.text();
+        if (text) {
+          sendEvent({ token: text });
+        }
+      }
+    } catch (error) {
+      console.error('Error streaming answer:', error);
+      sendEvent({ token: 'Sorry, I ran into an issue generating the response. Please try again.' });
+    }
+  }
+
+  /**
+   * Generates a short, descriptive chat title from the user's first message.
+   */
+  async generateTitle(query: string): Promise<string> {
+    const prompt = `
+    Generate an extremely short (3-5 words max) chat title for this user query.
+    The title should summarize the topic in plain English, like "Bitcoin Price Today" or "Ethereum vs Solana".
+    Return ONLY the title, nothing else.
+    
+    User query: ${query}
+    `;
+    try {
+      const result = await this.model.generateContent(prompt);
+      return result.response.text().trim().replace(/['"]/g, '').slice(0, 50);
+    } catch (error) {
+      return query.slice(0, 40);
+    }
+  }
 }
 
 export const generatorAgent = new GeneratorAgent();

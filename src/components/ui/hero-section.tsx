@@ -46,7 +46,7 @@ export function HeroSection() {
       <div className="relative container mx-auto px-4">
         <div className="text-center mb-12">
           <h1 className="text-5xl md:text-6xl font-bold mb-6 bg-gradient-primary bg-clip-text text-transparent">
-            CryptoTrend AI
+            Crypton AI
           </h1>
           <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
             Smart cryptocurrency insights powered by AI. Track real-time prices, analyze trends, and make informed investment decisions.

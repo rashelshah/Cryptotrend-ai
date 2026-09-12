@@ -17,7 +17,7 @@ app.get('/health', (req: Request, res: Response) => {
   res.status(200).json({ status: 'ok', message: 'Crypton AI Backend is running.' });
 });
 
-// Main query endpoint
+// Main query endpoint - SSE streaming
 app.post('/query', async (req: Request, res: Response) => {
   try {
     const { query } = req.body;
@@ -25,11 +25,43 @@ app.post('/query', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Query is required.' });
     }
 
-    const result = await orchestrator.processQuery(query);
-    res.json(result);
+    // Set SSE headers for real-time streaming
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.flushHeaders();
+
+    const sendEvent = (data: object) => {
+      res.write(`data: ${JSON.stringify(data)}\n\n`);
+    };
+
+    // Run RAG pipeline - orchestrator now returns a stream
+    await orchestrator.processQueryStream(query, sendEvent);
+
+    // Signal end of stream
+    sendEvent({ done: true });
+    res.end();
   } catch (error) {
     console.error('Error processing query:', error);
-    res.status(500).json({ error: 'Internal server error.' });
+    try {
+      res.write(`data: ${JSON.stringify({ error: 'Internal server error.' })}\n\n`);
+      res.end();
+    } catch (e) { /* already ended */ }
+  }
+});
+
+// Generate a short title from the first user message
+app.post('/generate-title', async (req: Request, res: Response) => {
+  try {
+    const { query } = req.body;
+    if (!query) return res.status(400).json({ error: 'Query is required.' });
+    const { generatorAgent } = await import('./agents/generator.agent');
+    const title = await generatorAgent.generateTitle(query);
+    res.json({ title });
+  } catch (error) {
+    console.error('Error generating title:', error);
+    res.status(500).json({ title: query.slice(0, 40) }); // fallback
   }
 });
 

@@ -34,7 +34,7 @@ export function AIChat() {
     {
       id: '1',
       type: 'ai',
-      content: "Hello! I'm CryptoTrend AI, your cryptocurrency advisor. I can help answer questions about Bitcoin, Ethereum, DeFi, investing strategies, wallets, staking, and more!\n\n💡 Currently running on knowledge base mode - I can still provide helpful information about cryptocurrency topics.",
+      content: "Hello! I'm Crypton AI, your cryptocurrency advisor. I can help answer questions about Bitcoin, Ethereum, DeFi, investing strategies, wallets, staking, and more!",
       timestamp: new Date(),
       confidence: 85
     }
@@ -133,33 +133,76 @@ export function AIChat() {
       // Save user message (non-blocking)
       supabase.from('ai_chat_messages').insert({ session_id: sessionId, role: 'user', content: questionText }).then(({ error }) => error && console.error('AIChat: error inserting user message', error));
 
-      const recent = messages.slice(-4).map(m => ({ role: m.type, content: m.content, ts: m.timestamp instanceof Date ? m.timestamp.toISOString() : String(m.timestamp) }));
       let streamedText = '';
+      let finalConfidence = 85;
+      let sourceType = 'RAG';
 
+      // Use SSE streaming for real-time token-by-token rendering
       const res = await fetch('/api/query', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ query: questionText })
       });
-      
+
+      if (!res.ok || !res.body) {
+        throw new Error(`HTTP ${res.status}`);
+      }
+
       gotChunk = true;
       if (stopRef.current.stop) return;
-      
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.error || `HTTP ${res.status}`);
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        if (stopRef.current.stop) { reader.cancel(); break; }
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          try {
+            const json = JSON.parse(line.slice(6));
+            if (json.done) break;
+            if (json.error) throw new Error(json.error);
+            if (json.sourceType) {
+              sourceType = json.sourceType;
+              finalConfidence = json.sourceType === 'FALLBACK' ? 40 : json.sourceType === 'LIVE_MARKET' ? 95 : 85;
+            }
+            if (json.token) {
+              streamedText += json.token;
+              setMessages(prev => prev.map(m => m.id === aiTempId ? { ...m, content: streamedText } : m));
+            }
+          } catch (e) { /* ignore parse errors on partial lines */ }
+        }
       }
-      
-      const data = await res.json();
-      streamedText = data.answer || 'Sorry, I could not generate an answer for that.';
-      
-      // Dynamic confidence based on sourceType
-      const finalConfidence = data.sourceType === 'FALLBACK' ? 40 : (data.sourceType === 'LIVE_MARKET' ? 95 : 85);
-      
+
+      // Finalize message with confidence
       setMessages(prev => prev.map(m => m.id === aiTempId ? { ...m, content: streamedText, confidence: finalConfidence } : m));
 
       // Save AI message
       supabase.from('ai_chat_messages').insert({ session_id: sessionId, role: 'ai', content: streamedText, confidence: finalConfidence }).then(({ error }) => error && console.error('AIChat: error inserting AI message', error));
+
+      // Smart title: if this is the first exchange, generate a descriptive title
+      const isFirstMessage = messages.filter(m => m.type === 'user').length === 0;
+      if (isFirstMessage && sessionId) {
+        fetch('/api/generate-title', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query: questionText })
+        }).then(r => r.json()).then(({ title }) => {
+          if (title) {
+            supabase.from('ai_chat_sessions').update({ title }).eq('id', sessionId).then(() => {
+              setSessions(prev => prev.map(s => s.id === sessionId ? { ...s, title } : s));
+            });
+          }
+        }).catch(() => {});
+      }
     } catch (error) {
       console.error('AIChat - streaming error:', error);
       const fallback: ChatMessage = { id: aiTempId, type: 'ai', content: 'AI service is slow right now. Please try a shorter question or retry in a few seconds.', timestamp: new Date(), confidence: 40 };
@@ -214,7 +257,7 @@ export function AIChat() {
             </div>
             <div className="flex flex-wrap items-center gap-2 sm:gap-3">
               <Button variant="outline" size="sm" onClick={() => setSidebarOpen(v => !v)} className="text-xs px-3 py-2 hidden lg:inline-flex"><Menu className="w-3 h-3 mr-1" /> Sessions</Button>
-              <Button variant="outline" size="sm" onClick={async () => { try { const { user } = await auth.getCurrentUser(); if (!user) return; const { data, error } = await supabase.from('ai_chat_sessions').insert({ user_id: user.id, title: `Chat ${new Date().toLocaleString()}` }).select('id, title, updated_at').single(); if (!error && data?.id) { setSessionId(data.id); setSessions(prev => [{ id: data.id, title: data.title || 'Untitled Chat', updated_at: data.updated_at }, ...prev]); setMessages([{ id: '1', type: 'ai', content: "Hello! I'm CryptoTrend AI, your cryptocurrency advisor. New chat session started.", timestamp: new Date(), confidence: 85 }]); } } catch (e) { console.error('New chat error:', e); } }} className="text-xs px-3 py-2"><Plus className="w-3 h-3 mr-1" /> New Chat</Button>
+              <Button variant="outline" size="sm" onClick={async () => { try { const { user } = await auth.getCurrentUser(); if (!user) return; const { data, error } = await supabase.from('ai_chat_sessions').insert({ user_id: user.id, title: `New Chat` }).select('id, title, updated_at').single(); if (!error && data?.id) { setSessionId(data.id); setSessions(prev => [{ id: data.id, title: data.title || 'New Chat', updated_at: data.updated_at }, ...prev]); setMessages([{ id: '1', type: 'ai', content: "Hello! I'm Crypton AI, your cryptocurrency advisor. New chat started — ask me anything!", timestamp: new Date(), confidence: 85 }]); } } catch (e) { console.error('New chat error:', e); } }} className="text-xs px-3 py-2"><Plus className="w-3 h-3 mr-1" /> New Chat</Button>
               <Button variant="outline" size="sm" onClick={() => { stopRef.current.stop = true; }} disabled={!isStreaming} className="text-xs px-3 py-2"><Square className="w-3 h-3 mr-1" /> Stop</Button>
             </div>
             <Badge variant="outline" className="text-xs bg-muted/50 px-2 py-1 hidden xs:inline-flex">Knowledge Base Mode</Badge>

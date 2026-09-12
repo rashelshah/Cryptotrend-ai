@@ -44,7 +44,7 @@ export async function chatWithAIStream(
     return { response: fb, confidence: 40 };
   }
 
-  const prompt = `You are CryptoTrend AI, an expert cryptocurrency advisor. Answer concisely (2-3 sentences max).
+  const prompt = `You are Crypton AI, an expert cryptocurrency advisor. Answer concisely (2-3 sentences max).
 Question: ${question}
 ${context ? `Context: ${JSON.stringify(context)}` : ''}`;
 
