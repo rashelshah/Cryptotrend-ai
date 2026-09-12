@@ -52,13 +52,12 @@ Circulating Supply: ${coinData.csupply}`;
 
     // 2. Handle Knowledge Data if needed (RAG via Supabase pgvector + BM25)
     if (intent === IntentType.KNOWLEDGE || intent === IntentType.HYBRID) {
-      console.log(`[Orchestrator] Rewriting query and fetching knowledge context...`);
-      const rewrittenQuery = await generatorAgent.rewriteQuery(query);
-      console.log(`[Orchestrator] Rewritten Query: ${rewrittenQuery}`);
+      console.log(`[Orchestrator] Fetching knowledge context for query...`);
 
       try {
-        const queryEmbedding = await embeddingService.generateEmbedding(rewrittenQuery);
-        const searchResults = await dbService.hybridSearch(rewrittenQuery, queryEmbedding, 8);
+        // Skip the rewriteQuery step to reduce API latency by 50%
+        const queryEmbedding = await embeddingService.generateEmbedding(query);
+        const searchResults = await dbService.hybridSearch(query, queryEmbedding, 8);
         
         if (searchResults && searchResults.length > 0) {
           sources = searchResults.map((res: any) => ({

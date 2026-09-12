@@ -60,12 +60,15 @@ export class GeneratorAgent {
     ${liveData}
 
     INSTRUCTIONS:
+    - Act as a knowledgeable, conversational AI assistant speaking directly to the user.
+    - Write your answer in a natural, easy-to-read conversational style, not a stiff document style.
+    - **CRITICAL**: DO NOT use markdown headers (###) or bullet points/lists. Write entirely in natural, flowing paragraphs.
     - You may use reasoning ability, and you should always prioritize answering based on:
       1. Retrieved context
       2. CoinLore API data
-    - If the provided context or live data contains the answer, append brief citations like (Source: ProjectName Docs) or (Source: CoinLore).
-    - If the requested information is completely missing from the retrieved context and live data, you may fall back to using your internal knowledge to answer the question. If you do this, explicitly state that you are answering based on general AI knowledge.
-    - Provide accurate, well-structured, and concise answers.
+    - If the provided context or live data contains the answer, smoothly integrate brief citations like (Source: ProjectName Docs) or (Source: CoinLore) into your conversational flow.
+    - If the requested information is completely missing from the retrieved context and live data, you may fall back to using your internal knowledge to answer the question. If you do this, politely state that you are answering based on general AI knowledge.
+    - Keep your answers highly relevant to the user's question, well-structured, but flowing naturally as a dialogue.
     `;
 
     try {
