@@ -122,12 +122,12 @@ export function AIChat() {
     const timer = setTimeout(() => {
       if (!gotChunk) {
         stopRef.current.stop = true;
-        const fb = 'AI took too long – here is a quick tip: DCA, manage risk, do your own research.';
+        const fb = 'AI is processing a complex RAG query... please try again if it takes too long.';
         setMessages(prev => prev.map(m => m.id === aiTempId ? { ...m, content: fb, confidence: 40 } : m));
         setLoading(false);
         setIsStreaming(false);
       }
-    }, STREAM_TIMEOUT);
+    }, 60000); // Increased to 60 seconds for Agentic RAG
 
     try {
       // Save user message (non-blocking)
@@ -136,22 +136,27 @@ export function AIChat() {
       const recent = messages.slice(-4).map(m => ({ role: m.type, content: m.content, ts: m.timestamp instanceof Date ? m.timestamp.toISOString() : String(m.timestamp) }));
       let streamedText = '';
 
-      await chatWithAIStream(
-        questionText,
-        { history: recent },
-        (delta) => {
-          gotChunk = true;
-          if (stopRef.current.stop) return;
-          streamedText += delta;
-          setMessages(prev => prev.map(m => m.id === aiTempId ? { ...m, content: streamedText } : m));
-        },
-        () => stopRef.current.stop
-      );
-
-      clearTimeout(timer);
-
-      const finalConfidence = 80;
-      setMessages(prev => prev.map(m => m.id === aiTempId ? { ...m, confidence: finalConfidence } : m));
+      const res = await fetch('http://localhost:3001/query', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: questionText })
+      });
+      
+      gotChunk = true;
+      if (stopRef.current.stop) return;
+      
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || `HTTP ${res.status}`);
+      }
+      
+      const data = await res.json();
+      streamedText = data.answer || 'Sorry, I could not generate an answer for that.';
+      
+      // Dynamic confidence based on sourceType
+      const finalConfidence = data.sourceType === 'FALLBACK' ? 40 : (data.sourceType === 'LIVE_MARKET' ? 95 : 85);
+      
+      setMessages(prev => prev.map(m => m.id === aiTempId ? { ...m, content: streamedText, confidence: finalConfidence } : m));
 
       // Save AI message
       supabase.from('ai_chat_messages').insert({ session_id: sessionId, role: 'ai', content: streamedText, confidence: finalConfidence }).then(({ error }) => error && console.error('AIChat: error inserting AI message', error));
